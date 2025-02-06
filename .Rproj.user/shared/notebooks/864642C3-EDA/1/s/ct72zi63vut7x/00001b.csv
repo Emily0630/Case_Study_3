@@ -1,0 +1,7 @@
+"0",""
+"0","# Histogram of Total Bed Time (TBT)"
+"0","ggplot(sleep, aes(x = TBT)) +"
+"0","  geom_histogram(binwidth = 30, fill = ""purple"", color = ""black"", alpha = 0.7) +"
+"0","  labs(title = ""Histogram of Total Bed Time (TBT)"","
+"0","       x = ""TBT (minutes)"","
+"0","       y = ""Frequency"")"

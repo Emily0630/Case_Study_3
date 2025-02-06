@@ -1,0 +1,7 @@
+"0","# 6. Plot TST over time to look for trends"
+"0","ggplot(sleep, aes(x = Date, y = TST)) +"
+"0","  geom_line(color = ""steelblue"") +"
+"0","  labs(title = ""Total Sleep Time over Time"","
+"0","       x = ""Date"","
+"0","       y = ""TST (minutes)"")"
+"0",""

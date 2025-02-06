@@ -1,0 +1,9 @@
+"0","# 5. Scatter plot: Miles run (Run) vs TST"
+"0","ggplot(sleep, aes(x = Run, y = TST)) +"
+"0","  geom_point(alpha = 0.6) +"
+"0","  geom_smooth(method = ""lm"", se = FALSE, color = ""darkgreen"") +"
+"0","  labs(title = ""Scatter Plot of Total Sleep Time vs. Miles Run"","
+"0","       x = ""Miles Run"","
+"0","       y = ""TST (minutes)"")"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
