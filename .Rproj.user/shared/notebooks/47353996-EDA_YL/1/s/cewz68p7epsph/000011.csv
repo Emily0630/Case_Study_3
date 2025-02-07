@@ -1,0 +1,20 @@
+"0","ggplot(sleep, aes(x = Bed_time_continuous)) +
+  geom_histogram(binwidth = 0.5, fill = ""steelblue"", color = ""black"") +
+  scale_x_continuous(breaks = c(22, 23, 24, 25, 26, 27), 
+                     labels = c(""22:00"", ""23:00"", ""0:00"", ""1:00"", ""2:00"", ""3:00""), 
+                     limits = c(22, 27)) +
+  labs(title = ""Distribution of Bedtime"", 
+       x = ""Bedtime (Hour of Day)"", 
+       y = ""Frequency"") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 20, face = ""bold""),  # Title text size
+    axis.title.x = element_text(size = 16),              # X-axis title size
+    axis.title.y = element_text(size = 16),              # Y-axis title size
+    axis.text.x = element_text(size = 14),               # X-axis tick label size
+    axis.text.y = element_text(size = 14)                # Y-axis tick label size
+  )
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 2 rows containing missing values or values outside the scale range (`geom_bar()`).[39m
+"

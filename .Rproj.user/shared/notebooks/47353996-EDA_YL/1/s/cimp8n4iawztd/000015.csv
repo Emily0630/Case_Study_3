@@ -1,0 +1,7 @@
+"0",""
+"0","# Compute Average Sleep Efficiency in the Range"
+"0","avg_sleep_efficiency <- sleep %>%"
+"0","  filter(TBT >= recommended_TBT_min & TBT <= recommended_TBT_max) %>%"
+"0","  summarise(mean_SleepEfficiency = mean(SleepEfficiency, na.rm = TRUE))"
+"0",""
+"0","print(avg_sleep_efficiency)"

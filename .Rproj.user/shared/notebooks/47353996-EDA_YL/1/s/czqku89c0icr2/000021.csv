@@ -1,0 +1,5 @@
+"0","# Read the data file"
+"0","sleep <- read.table(""sleep.txt"", header = TRUE, sep = """", stringsAsFactors = FALSE)"
+"0",""
+"0","# Display the first few rows"
+"0","head(sleep)"

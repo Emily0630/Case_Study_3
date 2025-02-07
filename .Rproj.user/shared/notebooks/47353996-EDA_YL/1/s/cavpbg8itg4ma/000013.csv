@@ -1,0 +1,9 @@
+"0","ggplot(sleep, aes(x = Run, y = SleepEfficiency)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = ""lm"", se = FALSE, color = ""darkgreen"") +
+  labs(title = ""Scatter Plot of SleepEfficiency vs. Miles Run"",
+       x = ""Miles Run"",
+       y = ""SleepEfficiency"")
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"

@@ -1,0 +1,7 @@
+"0",""
+"0","# Boxplot of TST by Calcium-Magnesium supplement (Cal)"
+"0","ggplot(sleep, aes(x = factor(Cal), y = TST)) +"
+"0","  geom_boxplot(fill = ""lightblue"") +"
+"0","  labs(title = ""Total Sleep Time by Calcium-Magnesium Supplement"","
+"0","       x = ""Cal (0 = No, 1 = Yes)"","
+"0","       y = ""TST (minutes)"")"

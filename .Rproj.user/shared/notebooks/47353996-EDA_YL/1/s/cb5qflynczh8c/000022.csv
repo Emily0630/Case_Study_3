@@ -1,0 +1,5 @@
+"0","ggplot(sleep, aes(x = Date, y = TTS)) +"
+"0","  geom_line(aes(group = Segment),color = ""steelblue"") +"
+"0","  labs(title = ""Time to Sleep over Time"","
+"0","       x = ""Date"","
+"0","       y = ""TTS (minutes)"")"

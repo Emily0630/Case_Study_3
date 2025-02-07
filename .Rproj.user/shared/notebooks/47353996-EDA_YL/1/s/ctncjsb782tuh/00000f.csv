@@ -1,0 +1,5 @@
+"0","# Diagnostic Plots for the Models"
+"0",""
+"0","# For model1 (TST ~ TBT)"
+"0","par(mfrow = c(2, 2))"
+"0","plot(model1)"

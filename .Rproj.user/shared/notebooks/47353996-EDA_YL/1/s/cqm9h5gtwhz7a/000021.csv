@@ -1,0 +1,7 @@
+"0",""
+"0","# Boxplot of TTS by Alcohol consumption (Alc)"
+"0","ggplot(sleep, aes(x = factor(Alc), y = TTS)) +"
+"0","  geom_boxplot(fill = ""blue"") +"
+"0","  labs(title = ""Time to Sleep by Alcohol Consumption"","
+"0","       x = ""Alc (0 = No, 1 = Yes)"","
+"0","       y = ""TTS (minutes)"")"

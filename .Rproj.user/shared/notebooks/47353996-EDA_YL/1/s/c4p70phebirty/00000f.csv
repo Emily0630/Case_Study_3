@@ -1,0 +1,7 @@
+"0","# Count data points in each Run_group"
+"0","run_group_counts <- sleep %>%"
+"0","  group_by(Run_group) %>%"
+"0","  summarise(Count = n(), .groups = ""drop"")"
+"0",""
+"0","# View the counts"
+"0","print(run_group_counts)"

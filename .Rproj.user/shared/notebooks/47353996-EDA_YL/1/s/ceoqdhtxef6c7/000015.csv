@@ -1,0 +1,12 @@
+"0","# 3. Scatter plot: TST vs TBT"
+"0","# This addresses the doctor’s hypothesis that actual sleep time (TST) might be nearly fixed regardless "
+"0","# of the time in bed (TBT) if the subject is spending more time in bed than necessary."
+"0","# so if the human is habitually given much more time in bed, they will just sleep less efficiently"
+"0","ggplot(sleep, aes(x = TBT, y = SleepEfficiency)) +"
+"0","  geom_point(alpha = 0.6) +"
+"0","  geom_smooth(method = ""lm"", se = FALSE, color = ""red"") +"
+"0","  labs(title = ""Scatter Plot of SleepEfficiency vs TBT"","
+"0","       x = ""Total Bed Time (minutes)"","
+"0","       y = ""Sleep Efficiency"")"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"

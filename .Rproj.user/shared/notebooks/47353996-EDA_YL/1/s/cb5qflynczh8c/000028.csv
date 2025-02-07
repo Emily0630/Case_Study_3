@@ -1,0 +1,7 @@
+"0",""
+"0","ggplot(sleep, aes(x = Date, y = Awake_time)) +"
+"0","  geom_line(aes(group = Segment),color = ""steelblue"") +"
+"0","  labs(title = ""Awake time over Time"","
+"0","       x = ""Date"","
+"0","       y = ""AwakeTime"")"
+"0",""

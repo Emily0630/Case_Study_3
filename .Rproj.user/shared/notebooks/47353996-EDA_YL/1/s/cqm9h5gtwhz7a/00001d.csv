@@ -1,0 +1,8 @@
+"0","# 4. Boxplots to compare sleep outcomes by supplement (Cal) and alcohol (Alc) intake."
+"0",""
+"0","# Boxplot of TTS by Calcium-Magnesium supplement (Cal)"
+"0","ggplot(sleep, aes(x = factor(Cal), y = TTS)) +"
+"0","  geom_boxplot(fill = ""blue"") +"
+"0","  labs(title = ""Time to Sleep by Calcium-Magnesium Supplement"","
+"0","       x = ""Cal (0 = No, 1 = Yes)"","
+"0","       y = ""TTS (minutes)"")"

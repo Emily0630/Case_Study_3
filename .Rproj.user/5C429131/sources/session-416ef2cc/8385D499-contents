@@ -57,8 +57,44 @@ sleep <- sleep %>%
 sleep <- sleep %>%
   mutate(SleepEfficiency = TST / TBT * 100)
 
+sleep <- sleep %>%
+  mutate(Awake_time = TBT - TTS - TST)
+
 head(sleep)
 ```
+```{r}
+
+filtered_data <- sleep %>% filter(Bed_hour == 23)
+
+filtered_data
+```
+
+
+```{r}
+# Adjust Bed_time to make it continuous (e.g., 1:00 AM -> 25, 2:00 AM -> 26)
+sleep$Bed_time_continuous <- ifelse(sleep$Bed_hour < 23, sleep$Bed_hour + 24, sleep$Bed_hour) + sleep$Bed_min / 60
+
+# Plot with the new continuous Bed_time
+ggplot(sleep, aes(x = Bed_time_continuous)) +
+  geom_histogram(binwidth = 0.5, fill = "steelblue", color = "black") +
+  scale_x_continuous(breaks = c(22, 23, 24, 25, 26, 27), 
+                     labels = c("22:00", "23:00", "0:00", "1:00", "2:00", "3:00"), 
+                     limits = c(22, 27)) +
+  labs(title = "Distribution of Bedtime", 
+       x = "Bedtime (Hour of Day)", 
+       y = "Frequency") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 20, face = "bold"),  # Title text size
+    axis.title.x = element_text(size = 16),              # X-axis title size
+    axis.title.y = element_text(size = 16),              # Y-axis title size
+    axis.text.x = element_text(size = 14),               # X-axis tick label size
+    axis.text.y = element_text(size = 14)                # Y-axis tick label size
+  )
+
+```
+
+## Data -- time he is out of town; no missing values; 
 
 ## EDA
 
@@ -72,19 +108,20 @@ summary(sleep)
 # Count combinations of Cal > 0 and Alc > 0
 result <- sleep %>%
   mutate(
-    Cal_greater_than_0 = Cal > 0,
-    Alc_greater_than_0 = Alc > 0
+    Take_Cal = Cal > 0,
+    Drink_Alc = Alc > 0
   ) %>%
-  group_by(Cal_greater_than_0, Alc_greater_than_0) %>%
+  group_by(Take_Cal, Drink_Alc) %>%
   summarise(Count = n(), .groups = "drop")
 
 # View the result
 print(result)
+
 ```
 
 ```{r}
 # Correlations among numeric variables
-numeric_cols <- c("TTS", "TST", "TBT", "Run", "SleepEfficiency")
+numeric_cols <- c("TTS", "TST", "TBT", "Run", "SleepEfficiency","Awake_time",)
 cor_matrix <- cor(sleep[, numeric_cols], use = "complete.obs")
 print(cor_matrix)
 ```
@@ -139,7 +176,7 @@ ggplot(sleep, aes(x = TBT, y = SleepEfficiency)) +
 
 ```{r}
 # 4. Boxplots to compare sleep outcomes by supplement (Cal) and alcohol (Alc) intake.
-
+# add 4combinations
 # Boxplot of TTS by Calcium-Magnesium supplement (Cal)
 ggplot(sleep, aes(x = factor(Cal), y = TTS)) +
   geom_boxplot(fill = "blue") +
@@ -168,6 +205,37 @@ ggplot(sleep, aes(x = factor(Alc), y = TTS)) +
        x = "Alc (0 = No, 1 = Yes)",
        y = "TTS (minutes)")
 ```
+```{r}
+# Add combinations of Cal and Alc to the dataset
+sleep <- sleep %>%
+  mutate(
+    Combination = interaction(factor(Cal), factor(Alc), sep = ", "),
+    Combination_Label = case_when(
+      Combination == "0, 0" ~ "Cal=0, Alc=0",
+      Combination == "0, 1" ~ "Cal=0, Alc=1",
+      Combination == "1, 0" ~ "Cal=1, Alc=0",
+      Combination == "1, 1" ~ "Cal=1, Alc=1"
+    )
+  )
+
+# Plot boxplots for TTS across combinations of Cal and Alc
+ggplot(sleep, aes(x = Combination_Label, y = TTS, fill = Combination_Label)) +
+  geom_boxplot() +
+  scale_fill_brewer(palette = "Set2") +
+  labs(
+    title = "Time to Sleep by Calcium and Alcohol Combinations",
+    x = "Combinations (Cal, Alc)",
+    y = "TTS (minutes)"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16, face = "bold"),
+    axis.title = element_text(size = 14),
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+    legend.position = "none"
+  )
+
+```
 
 ```{r}
 # 5. Scatter plot: Miles run (Run) vs TST
@@ -177,35 +245,150 @@ ggplot(sleep, aes(x = Run, y = TST)) +
   labs(title = "Scatter Plot of Total Sleep Time vs. Miles Run",
        x = "Miles Run",
        y = "TST (minutes)")
+
+# BOXPLOT FOR SLEEP EFFICIENCY
+ggplot(sleep, aes(x = Run, y = SleepEfficiency)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE, color = "darkgreen") +
+  labs(title = "Scatter Plot of SleepEfficiency vs. Miles Run",
+       x = "Miles Run",
+       y = "SleepEfficiency")
+```
+```{r}
+# Group Run into intervals (0-1, 1-2, etc.)
+sleep <- sleep %>%
+  mutate(
+    Run_group = cut(Run, breaks = seq(0, max(Run, na.rm = TRUE) + 1, by = 1), include.lowest = TRUE)
+  )
+
+# TTS by Run_group
+p1 <- ggplot(sleep, aes(x = Run_group, y = TTS)) +
+  geom_boxplot(fill = "blue", alpha = 0.7) +
+  labs(
+    title = "Time to Sleep (TTS) by Run Groups",
+    x = "Run Group (Miles)",
+    y = "TTS (Minutes)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Awake_time by Run_group
+p2 <- ggplot(sleep, aes(x = Run_group, y = Awake_time)) +
+  geom_boxplot(fill = "green", alpha = 0.7) +
+  labs(
+    title = "Awake Time by Run Groups",
+    x = "Run Group (Miles)",
+    y = "Awake Time (Minutes)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# SleepEfficiency by Run_group
+p3 <- ggplot(sleep, aes(x = Run_group, y = SleepEfficiency)) +
+  geom_boxplot(fill = "purple", alpha = 0.7) +
+  labs(
+    title = "Sleep Efficiency by Run Groups",
+    x = "Run Group (Miles)",
+    y = "Sleep Efficiency (Ratio)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# TST by Run_group
+p4 <- ggplot(sleep, aes(x = Run_group, y = TST)) +
+  geom_boxplot(fill = "orange", alpha = 0.7) +
+  labs(
+    title = "Total Sleep Time (TST) by Run Groups",
+    x = "Run Group (Miles)",
+    y = "TST (Minutes)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
 ```
 
 ```{r}
-# 6. Plot over time to look for trends
+library(patchwork)
+
+# Combine all plots into a grid
+combined_plot <- p1 + p2 + p3 + p4 +
+  plot_layout(ncol = 2) +
+  plot_annotation(
+    title = "Influence of Run on Sleep Metrics (Grouped by Run Intervals)",
+    theme = theme(plot.title = element_text(size = 18, face = "bold"))
+  )
+
+# Display the combined plot
+print(combined_plot)
+
+```
+```{r}
+# Count data points in each Run_group
+run_group_counts <- sleep %>%
+  group_by(Run_group) %>%
+  summarise(Count = n(), .groups = "drop")
+
+# View the counts
+print(run_group_counts)
+```
+
+
+```{r}
+# Create a sequence of all dates in the range
+full_dates <- seq(min(sleep$Date), max(sleep$Date), by = "day")
+
+# Identify missing dates
+missing_dates <- setdiff(full_dates, sleep$Date)
+```
+
+```{r}
+# Sort the data by date
+sleep <- sleep %>%
+  arrange(Date)
+
+# Identify gaps between consecutive dates
+sleep <- sleep %>%
+  mutate(
+    Gap = c(0, diff(Date)) > 1,        # Mark if there is a gap
+    Segment = cumsum(c(0, diff(Date)) > 1)  # Create a segment ID for continuous periods
+  )
+
 ggplot(sleep, aes(x = Date, y = TST)) +
-  geom_line(color = "steelblue") +
-  labs(title = "Total Sleep Time over Time",
-       x = "Date",
-       y = "TST (minutes)")
+  geom_line(aes(group = Segment), color = "steelblue") +  # Plot continuous segments
+  labs(
+    title = "Total Sleep Time over Time",
+    x = "Date",
+    y = "TST (minutes)"
+  ) +
+  theme_minimal()
+```
 
-
+```{r}
 ggplot(sleep, aes(x = Date, y = TTS)) +
-  geom_line(color = "steelblue") +
+  geom_line(aes(group = Segment),color = "steelblue") +
   labs(title = "Time to Sleep over Time",
        x = "Date",
        y = "TTS (minutes)")
 
 ggplot(sleep, aes(x = Date, y = TBT)) +
-  geom_line(color = "steelblue") +
+  geom_line(aes(group = Segment),color = "steelblue") +
   labs(title = "Total Bed Time over Time",
        x = "Date",
        y = "TBT (minutes)")
 
 
 ggplot(sleep, aes(x = Date, y = SleepEfficiency)) +
-  geom_line(color = "steelblue") +
+  geom_line(aes(group = Segment),color = "steelblue") +
   labs(title = "SleepEfficiency over Time",
        x = "Date",
        y = "SleepEfficiency")
+
+ggplot(sleep, aes(x = Date, y = Awake_time)) +
+  geom_line(aes(group = Segment),color = "steelblue") +
+  labs(title = "Awake time over Time",
+       x = "Date",
+       y = "AwakeTime")
 
 ```
 
@@ -241,6 +424,11 @@ avg_sleep_efficiency <- sleep %>%
 
 print(avg_sleep_efficiency)
 ```
+
+```{r}
+plot(x = sleep$TBT, y = sleep$SleepEfficiency, data = sleep)
+```
+
 
 ```{r}
 # Research Question 2:

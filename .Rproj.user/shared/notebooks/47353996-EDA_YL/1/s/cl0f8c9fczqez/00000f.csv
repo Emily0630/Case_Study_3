@@ -1,0 +1,5 @@
+"0","# Create a sequence of all dates in the range"
+"0","full_dates <- seq(min(sleep$Date), max(sleep$Date), by = ""day"")"
+"0",""
+"0","# Identify missing dates"
+"0","missing_dates <- setdiff(full_dates, sleep$Date)"

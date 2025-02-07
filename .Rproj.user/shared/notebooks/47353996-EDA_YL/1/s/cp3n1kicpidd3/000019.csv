@@ -1,0 +1,4 @@
+"0",""
+"0","filtered_data <- sleep %>% filter(Bed_hour == 23)"
+"0",""
+"0","filtered_data"
