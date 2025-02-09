@@ -1,9 +1,10 @@
 ---
-title: "EDA"
-author: "Yinyihong Liu"
-date: "2025-02-05"
-output: pdf_document
+title: "EDA_Mixed_Case3_STA723"
+author: "Ruwimal Yasantha Pathiraja"
+date: "2025-02-07"
+output: html_document
 ---
+
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -121,7 +122,7 @@ print(result)
 
 ```{r}
 # Correlations among numeric variables
-numeric_cols <- c("TTS", "TST", "TBT", "Run", "SleepEfficiency","Awake_time",)
+numeric_cols <- c("TTS", "TST", "TBT", "Run", "SleepEfficiency","Awake_time")
 cor_matrix <- cor(sleep[, numeric_cols], use = "complete.obs")
 print(cor_matrix)
 ```
@@ -463,22 +464,8 @@ summary(model4)
 
 ```{r}
 # Consider sleep efficiency as an outcome.
-model5 <- lm(SleepEfficiency ~ TBT + Cal + Alc + Run + as.factor(Bed_hour), data = sleep)
+model5 <- lm(SleepEfficiency ~ TBT + Cal + Alc + Run, data = sleep)
 summary(model5)
-```
-```{r}
-par(mfrow = c(2, 2))
-plot(model5)
-```
-
-```{r}
-# Consider awake times 
-model52 <- lm(Awake_time ~ TBT + Cal + Alc + Run + as.factor(Bed_hour), data = sleep)
-summary(model52)
-```
-```{r}
-par(mfrow = c(2, 2))
-plot(model52)
 ```
 
 ```{r}
@@ -620,74 +607,84 @@ plot(model_TTS_3)
 # Reset plotting parameters to default (1 plot per page)
 par(mfrow = c(1, 1))
 ```
-## Autogressive Models
-```{r}
-# Install required packages
-#install.packages("tseries")  # For ADF test
-#install.packages("urca")     # For KPSS test
 
-# Load libraries
-library(tseries)
-library(urca)
+
+BOXplots after separating bedtimes into 6 categories and against sleep metrics:
+
+```{r}
+# Load necessary library
+library(patchwork)
+
+# Categorize bedtime into six periods
+sleep <- sleep %>%
+  mutate(
+    BedtimeCategory = case_when(
+      Bed_hour >= 20 & Bed_hour < 22 ~ "20:00-21:59",
+      Bed_hour >= 22 & Bed_hour < 24  ~ "22:00-23:59",
+      Bed_hour >= 0  & Bed_hour < 2  ~ "00:00-01:59",
+      Bed_hour >= 2  & Bed_hour < 4  ~ "02:00-03:59",
+      Bed_hour >= 4  & Bed_hour < 6  ~ "04:00-05:59",
+      TRUE ~ "Other"
+    ),
+    BedtimeCategory = factor(BedtimeCategory, 
+                             levels = c("20:00-21:59", "22:00-23:59", "00:00-01:59",
+                                        "02:00-03:59", "04:00-05:59", "Other"))
+  )
+
+# Create individual boxplots
+p1 <- ggplot(sleep, aes(x = BedtimeCategory, y = SleepEfficiency, fill = BedtimeCategory)) +
+  geom_boxplot() +
+  labs(title = "Sleep Efficiency", x = "Bedtime Period", y = "Sleep Efficiency (%)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none")
+
+p2 <- ggplot(sleep, aes(x = BedtimeCategory, y = TTS, fill = BedtimeCategory)) +
+  geom_boxplot() +
+  labs(title = "Time to Sleep (TTS)", x = "Bedtime Period", y = "TTS (minutes)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none")
+
+p3 <- ggplot(sleep, aes(x = BedtimeCategory, y = Awake_time, fill = BedtimeCategory)) +
+  geom_boxplot() +
+  labs(title = "Awake Time", x = "Bedtime Period", y = "Awake Time (minutes)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none")
+
+p4 <- ggplot(sleep, aes(x = BedtimeCategory, y = TST, fill = BedtimeCategory)) +
+  geom_boxplot() +
+  labs(title = "Total Sleep Time (TST)", x = "Bedtime Period", y = "TST (minutes)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none")
+
+
+combined_plot <- (p1 | p2) / (p3 | p4) + 
+  plot_annotation(
+    title = "Effect of Bedtime on Sleep Metrics",
+    theme = theme(plot.title = element_text(size = 16, face = "bold"))
+  )
+
+
+print(combined_plot)
 
 ```
 
-```{r}
-# ADF test for TST
-adf_test <- adf.test(sleep$TST, alternative = "stationary")
-print(adf_test)
-```
- p-value is less than 0.05, and conclude the series is stationary.
-
-
+Mixed effects model grouped by segment:
 
 ```{r}
-plot(sleep$TST, type = "l", main = "Original TST", ylab = "TST")
+library(lme4)
+
+# Fit a mixed-effects model with Segment as a grouping factor (random effect)
+model_mixed <- lmer(SleepEfficiency ~ TTS + Awake_time + Bed_hour + Cal + Alc + Run + (1 | Segment), data = sleep)
+
+
+summary(model_mixed)
+
+
+
+plot(model_mixed)
+
+# Random effects structure
+ranef(model_mixed)
+
 ```
-```{r}
-# PACF plot for TTS (or another variable of interest)
-pacf(sleep$TST, main="Partial Autocorrelation Function (PACF) of TST")
-```
-
-```{r}
-# Fit AR models with different orders and compare AIC/BIC
-library(forecast)
-
-# Fit AR models from order 1 to 5
-aic_values <- sapply(1:5, function(p) {
-  ar_model <- Arima(sleep$TST, order = c(p, 0, 0))  # ARIMA(p, d=0, q=0) is AR(p)
-  return(ar_model$aic)
-})
-
-# Identify the optimal p
-optimal_p <- which.min(aic_values)
-cat("Optimal order (p) based on AIC:", optimal_p, "\n")
-```
-
-$TST_t = \phi_1 TST_{t-1}+ c _ eps_{t}$
-
-
-```{r}
-# Automatically select the best ARIMA model (ARIMA(p, d=0, q=0) for AR models)
-library(forecast)
-auto_model <- auto.arima(sleep$TST, d=0, max.p=10, max.q=0)  # d=0 enforces AR model
-print(auto_model)
-```
-```{r}
-# Fit an AR(1) model for TTS
-ar_model <- arima(sleep$TST, order = c(1, 0, 0))  # ARIMA(p, d, q) -> AR(1) with p=1, d=0, q=0
-summary(ar_model)
-```
-
--0.1554 a weak negative correlation between the current TST_{t} and previous one TST_{t-1}
-mean TST 445.70 min
-
-
-```{r}
-# Plot residuals to check for patterns
-checkresiduals(ar_model)
-```
-
-
-residuals normal disted
 

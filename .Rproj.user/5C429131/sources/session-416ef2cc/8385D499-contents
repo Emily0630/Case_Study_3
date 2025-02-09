@@ -463,8 +463,22 @@ summary(model4)
 
 ```{r}
 # Consider sleep efficiency as an outcome.
-model5 <- lm(SleepEfficiency ~ TBT + Cal + Alc + Run, data = sleep)
+model5 <- lm(SleepEfficiency ~ TBT + Cal + Alc + Run + as.factor(Bed_hour), data = sleep)
 summary(model5)
+```
+```{r}
+par(mfrow = c(2, 2))
+plot(model5)
+```
+
+```{r}
+# Consider awake times 
+model52 <- lm(Awake_time ~ TBT + Cal + Alc + Run + as.factor(Bed_hour), data = sleep)
+summary(model52)
+```
+```{r}
+par(mfrow = c(2, 2))
+plot(model52)
 ```
 
 ```{r}
@@ -606,4 +620,74 @@ plot(model_TTS_3)
 # Reset plotting parameters to default (1 plot per page)
 par(mfrow = c(1, 1))
 ```
+## Autogressive Models
+```{r}
+# Install required packages
+#install.packages("tseries")  # For ADF test
+#install.packages("urca")     # For KPSS test
+
+# Load libraries
+library(tseries)
+library(urca)
+
+```
+
+```{r}
+# ADF test for TST
+adf_test <- adf.test(sleep$TST, alternative = "stationary")
+print(adf_test)
+```
+ p-value is less than 0.05, and conclude the series is stationary.
+
+
+
+```{r}
+plot(sleep$TST, type = "l", main = "Original TST", ylab = "TST")
+```
+```{r}
+# PACF plot for TTS (or another variable of interest)
+pacf(sleep$TST, main="Partial Autocorrelation Function (PACF) of TST")
+```
+
+```{r}
+# Fit AR models with different orders and compare AIC/BIC
+library(forecast)
+
+# Fit AR models from order 1 to 5
+aic_values <- sapply(1:5, function(p) {
+  ar_model <- Arima(sleep$TST, order = c(p, 0, 0))  # ARIMA(p, d=0, q=0) is AR(p)
+  return(ar_model$aic)
+})
+
+# Identify the optimal p
+optimal_p <- which.min(aic_values)
+cat("Optimal order (p) based on AIC:", optimal_p, "\n")
+```
+
+$TST_t = \phi_1 TST_{t-1}+ c _ eps_{t}$
+
+
+```{r}
+# Automatically select the best ARIMA model (ARIMA(p, d=0, q=0) for AR models)
+library(forecast)
+auto_model <- auto.arima(sleep$TST, d=0, max.p=10, max.q=0)  # d=0 enforces AR model
+print(auto_model)
+```
+```{r}
+# Fit an AR(1) model for TTS
+ar_model <- arima(sleep$TST, order = c(1, 0, 0))  # ARIMA(p, d, q) -> AR(1) with p=1, d=0, q=0
+summary(ar_model)
+```
+
+-0.1554 a weak negative correlation between the current TST_{t} and previous one TST_{t-1}
+mean TST 445.70 min
+
+
+```{r}
+# Plot residuals to check for patterns
+checkresiduals(ar_model)
+```
+
+
+residuals normal disted
 
