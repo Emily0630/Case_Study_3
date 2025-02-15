@@ -1,0 +1,1221 @@
+---
+title: "EDA_Mixed_Case3_STA723"
+author: "Ruwimal Yasantha Pathiraja"
+date: "2025-02-07"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)  
+library(lubridate)  
+library(dplyr)
+library(zoo)
+```
+
+## Load Data
+
+```{r}
+# Read the data file
+sleep <- read.table("sleep.txt", header = TRUE, sep = "", stringsAsFactors = FALSE)
+
+# Display the first few rows
+head(sleep)
+```
+
+```{r}
+colSums(is.na(sleep))
+```
+
+
+```{r}
+# Add default year (e.g., 2025) to the Date column
+sleep$Date <- paste("2025", sleep$Date)
+
+# Convert Date to Date object
+sleep$Date <- as.Date(sleep$Date, format="%Y %m/%d")
+
+sleep <- sleep %>%
+  mutate(
+    temp_bed_hour = floor(Bedtime / 100),  # Extract hours
+    Bed_min  = Bedtime %% 100,        # Extract minutes
+    Bed_hour = (temp_bed_hour + 12) %% 24,  # Adjust to 24-hour format
+    Bedtime_time = as.POSIXct(sprintf("%02d:%02d:00", Bed_hour, Bed_min), format="%H:%M:%S")
+  )
+
+
+sleep <- sleep %>%
+  mutate(
+    Bedtime_time = format(Bedtime_time, "%H:%M:%S")  # Extract only the time part
+  )
+
+sleep <- sleep %>%
+  select(-temp_bed_hour)  
+
+
+# Create a new variable for sleep efficiency (as a percentage)
+sleep <- sleep %>%
+  mutate(SleepEfficiency = TST / TBT * 100)
+
+sleep <- sleep %>%
+  mutate(Awake_time = TBT - TTS - TST)
+
+head(sleep)
+```
+```{r}
+
+filtered_data <- sleep %>% filter(Bed_hour == 23)
+
+filtered_data
+```
+
+
+```{r}
+# Adjust Bed_time to make it continuous (e.g., 1:00 AM -> 25, 2:00 AM -> 26)
+sleep$Bed_time_continuous <- ifelse(sleep$Bed_hour < 23, sleep$Bed_hour + 24, sleep$Bed_hour) + sleep$Bed_min / 60
+
+# Plot with the new continuous Bed_time
+ggplot(sleep, aes(x = Bed_time_continuous)) +
+  geom_histogram(binwidth = 0.5, fill = "steelblue", color = "black") +
+  scale_x_continuous(breaks = c(22, 23, 24, 25, 26, 27), 
+                     labels = c("22:00", "23:00", "0:00", "1:00", "2:00", "3:00"), 
+                     limits = c(22, 27)) +
+  labs(title = "Distribution of Bedtime", 
+       x = "Bedtime (Hour of Day)", 
+       y = "Frequency") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 20, face = "bold"),  # Title text size
+    axis.title.x = element_text(size = 16),              # X-axis title size
+    axis.title.y = element_text(size = 16),              # Y-axis title size
+    axis.text.x = element_text(size = 14),               # X-axis tick label size
+    axis.text.y = element_text(size = 14)                # Y-axis tick label size
+  )
+
+```
+
+## Data -- time he is out of town; no missing values; 
+
+## EDA
+
+```{r}
+# 1. Look at the basic structure and summary of the data
+str(sleep)
+summary(sleep)
+```
+
+```{r}
+# Count combinations of Cal > 0 and Alc > 0
+result <- sleep %>%
+  mutate(
+    Take_Cal = Cal > 0,
+    Drink_Alc = Alc > 0
+  ) %>%
+  group_by(Take_Cal, Drink_Alc) %>%
+  summarise(Count = n(), .groups = "drop")
+
+# View the result
+print(result)
+
+```
+
+```{r}
+# Correlations among numeric variables
+numeric_cols <- c("TTS", "TST", "TBT", "Run", "SleepEfficiency","Awake_time")
+cor_matrix <- cor(sleep[, numeric_cols], use = "complete.obs")
+print(cor_matrix)
+```
+
+
+
+```{r}
+# 2. Histograms for key variables
+
+# Histogram of Total Sleep Time (TST)
+ggplot(sleep, aes(x = TST)) +
+  geom_histogram(binwidth = 30, fill = "blue", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Total Sleep Time (TST)",
+       x = "TST (minutes)",
+       y = "Frequency")
+
+# Histogram of Time To Sleep (TTS)
+ggplot(sleep, aes(x = TTS)) +
+  geom_histogram(binwidth = 5, fill = "green", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Time To Sleep (TTS)",
+       x = "TTS (minutes)",
+       y = "Frequency")
+
+# Histogram of Total Bed Time (TBT)
+ggplot(sleep, aes(x = TBT)) +
+  geom_histogram(binwidth = 30, fill = "purple", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Total Bed Time (TBT)",
+       x = "TBT (minutes)",
+       y = "Frequency")
+
+# Histogram of Sleep Efficiency
+ggplot(sleep, aes(x = SleepEfficiency)) +
+  geom_histogram(binwidth = 5, fill = "orange", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Sleep Efficiency",
+       x = "Sleep Efficiency (%)",
+       y = "Frequency")
+```
+
+```{r}
+# 3. Scatter plot: TST vs TBT
+# This addresses the doctor’s hypothesis that actual sleep time (TST) might be nearly fixed regardless 
+# of the time in bed (TBT) if the subject is spending more time in bed than necessary.
+# so if the human is habitually given much more time in bed, they will just sleep less efficiently
+ggplot(sleep, aes(x = TBT, y = SleepEfficiency)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  labs(title = "Scatter Plot of SleepEfficiency vs TBT",
+       x = "Total Bed Time (minutes)",
+       y = "Sleep Efficiency")
+```
+
+
+```{r}
+# 4. Boxplots to compare sleep outcomes by supplement (Cal) and alcohol (Alc) intake.
+# add 4combinations
+# Boxplot of TTS by Calcium-Magnesium supplement (Cal)
+ggplot(sleep, aes(x = factor(Cal), y = TTS)) +
+  geom_boxplot(fill = "blue") +
+  labs(title = "Time to Sleep by Calcium-Magnesium Supplement",
+       x = "Cal (0 = No, 1 = Yes)",
+       y = "TTS (minutes)")
+
+# Boxplot of TST by Calcium-Magnesium supplement (Cal)
+ggplot(sleep, aes(x = factor(Cal), y = TST)) +
+  geom_boxplot(fill = "lightblue") +
+  labs(title = "Total Sleep Time by Calcium-Magnesium Supplement",
+       x = "Cal (0 = No, 1 = Yes)",
+       y = "TST (minutes)")
+
+# Boxplot of TTS by Alcohol consumption (Alc)
+ggplot(sleep, aes(x = factor(Alc), y = TTS)) +
+  geom_boxplot(fill = "blue") +
+  labs(title = "Time to Sleep by Alcohol Consumption",
+       x = "Alc (0 = No, 1 = Yes)",
+       y = "TTS (minutes)")
+
+# Boxplot of TST by Alcohol consumption (Alc)
+ggplot(sleep, aes(x = factor(Alc), y = TTS)) +
+  geom_boxplot(fill = "lightblue") +
+  labs(title = "Time to Sleep by Alcohol Consumption",
+       x = "Alc (0 = No, 1 = Yes)",
+       y = "TTS (minutes)")
+```
+```{r}
+# Add combinations of Cal and Alc to the dataset
+sleep <- sleep %>%
+  mutate(
+    Combination = interaction(factor(Cal), factor(Alc), sep = ", "),
+    Combination_Label = case_when(
+      Combination == "0, 0" ~ "Cal=0, Alc=0",
+      Combination == "0, 1" ~ "Cal=0, Alc=1",
+      Combination == "1, 0" ~ "Cal=1, Alc=0",
+      Combination == "1, 1" ~ "Cal=1, Alc=1"
+    )
+  )
+
+# Plot boxplots for TTS across combinations of Cal and Alc
+ggplot(sleep, aes(x = Combination_Label, y = TTS, fill = Combination_Label)) +
+  geom_boxplot() +
+  scale_fill_brewer(palette = "Set2") +
+  labs(
+    title = "Time to Sleep by Calcium and Alcohol Combinations",
+    x = "Combinations (Cal, Alc)",
+    y = "TTS (minutes)"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16, face = "bold"),
+    axis.title = element_text(size = 14),
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+    legend.position = "none"
+  )
+
+```
+
+```{r}
+# 5. Scatter plot: Miles run (Run) vs TST
+ggplot(sleep, aes(x = Run, y = TST)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE, color = "darkgreen") +
+  labs(title = "Scatter Plot of Total Sleep Time vs. Miles Run",
+       x = "Miles Run",
+       y = "TST (minutes)")
+
+# BOXPLOT FOR SLEEP EFFICIENCY
+ggplot(sleep, aes(x = Run, y = SleepEfficiency)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE, color = "darkgreen") +
+  labs(title = "Scatter Plot of SleepEfficiency vs. Miles Run",
+       x = "Miles Run",
+       y = "SleepEfficiency")
+```
+```{r}
+# Group Run into intervals (0-1, 1-2, etc.)
+sleep <- sleep %>%
+  mutate(
+    Run_group = cut(Run, breaks = seq(0, max(Run, na.rm = TRUE) + 1, by = 1), include.lowest = TRUE)
+  )
+
+# TTS by Run_group
+p1 <- ggplot(sleep, aes(x = Run_group, y = TTS)) +
+  geom_boxplot(fill = "blue", alpha = 0.7) +
+  labs(
+    title = "Time to Sleep (TTS) by Run Groups",
+    x = "Run Group (Miles)",
+    y = "TTS (Minutes)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Awake_time by Run_group
+p2 <- ggplot(sleep, aes(x = Run_group, y = Awake_time)) +
+  geom_boxplot(fill = "green", alpha = 0.7) +
+  labs(
+    title = "Awake Time by Run Groups",
+    x = "Run Group (Miles)",
+    y = "Awake Time (Minutes)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# SleepEfficiency by Run_group
+p3 <- ggplot(sleep, aes(x = Run_group, y = SleepEfficiency)) +
+  geom_boxplot(fill = "purple", alpha = 0.7) +
+  labs(
+    title = "Sleep Efficiency by Run Groups",
+    x = "Run Group (Miles)",
+    y = "Sleep Efficiency (Ratio)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# TST by Run_group
+p4 <- ggplot(sleep, aes(x = Run_group, y = TST)) +
+  geom_boxplot(fill = "orange", alpha = 0.7) +
+  labs(
+    title = "Total Sleep Time (TST) by Run Groups",
+    x = "Run Group (Miles)",
+    y = "TST (Minutes)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
+
+```{r}
+library(patchwork)
+
+# Combine all plots into a grid
+combined_plot <- p1 + p2 + p3 + p4 +
+  plot_layout(ncol = 2) +
+  plot_annotation(
+    title = "Influence of Run on Sleep Metrics (Grouped by Run Intervals)",
+    theme = theme(plot.title = element_text(size = 18, face = "bold"))
+  )
+
+# Display the combined plot
+print(combined_plot)
+
+```
+```{r}
+# Count data points in each Run_group
+run_group_counts <- sleep %>%
+  group_by(Run_group) %>%
+  summarise(Count = n(), .groups = "drop")
+
+# View the counts
+print(run_group_counts)
+```
+
+
+```{r}
+# Create a sequence of all dates in the range
+full_dates <- seq(min(sleep$Date), max(sleep$Date), by = "day")
+
+# Identify missing dates
+missing_dates <- setdiff(full_dates, sleep$Date)
+```
+
+```{r}
+# Sort the data by date
+sleep <- sleep %>%
+  arrange(Date)
+
+# Identify gaps between consecutive dates
+sleep <- sleep %>%
+  mutate(
+    Gap = c(0, diff(Date)) > 1,        # Mark if there is a gap
+    Segment = cumsum(c(0, diff(Date)) > 1)  # Create a segment ID for continuous periods
+  )
+
+ggplot(sleep, aes(x = Date, y = TST)) +
+  geom_line(aes(group = Segment), color = "steelblue") +  # Plot continuous segments
+  labs(
+    title = "Total Sleep Time over Time",
+    x = "Date",
+    y = "TST (minutes)"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+ggplot(sleep, aes(x = Date, y = TTS)) +
+  geom_line(aes(group = Segment),color = "steelblue") +
+  labs(title = "Time to Sleep over Time",
+       x = "Date",
+       y = "TTS (minutes)")
+
+ggplot(sleep, aes(x = Date, y = TBT)) +
+  geom_line(aes(group = Segment),color = "steelblue") +
+  labs(title = "Total Bed Time over Time",
+       x = "Date",
+       y = "TBT (minutes)")
+
+
+ggplot(sleep, aes(x = Date, y = SleepEfficiency)) +
+  geom_line(aes(group = Segment),color = "steelblue") +
+  labs(title = "SleepEfficiency over Time",
+       x = "Date",
+       y = "SleepEfficiency")
+
+ggplot(sleep, aes(x = Date, y = Awake_time)) +
+  geom_line(aes(group = Segment),color = "steelblue") +
+  labs(title = "Awake time over Time",
+       x = "Date",
+       y = "AwakeTime")
+
+```
+
+## Frequentist Modeling
+```{r}
+# Research Question 1:
+# According to the doctor's instructions, the subject should spend (average TST + 30 minutes) in bed.
+
+# Calculate mean and standard deviation of TST
+mean_TST <- mean(sleep$TST, na.rm = TRUE)
+sd_TST <- sd(sleep$TST, na.rm = TRUE)
+
+# Define the recommended TBT range as (Mean ± 1 SD) + 30 minutes
+recommended_TBT_min <- (mean_TST - sd_TST) + 30
+recommended_TBT_max <- (mean_TST + sd_TST) + 30
+
+# Print the recommended range
+print(paste("Recommended Total Bed Time (TBT) Range:", 
+            round(recommended_TBT_min, 1), "to", 
+            round(recommended_TBT_max, 1), "minutes"))
+
+# Filter dataset to get Sleep Efficiency values for TBT in this range
+filtered_sleep <- sleep %>%
+  filter(TBT >= recommended_TBT_min & TBT <= recommended_TBT_max) %>%
+  select(TBT, SleepEfficiency)
+
+print(filtered_sleep)
+
+# Compute Average Sleep Efficiency in the Range
+avg_sleep_efficiency <- sleep %>%
+  filter(TBT >= recommended_TBT_min & TBT <= recommended_TBT_max) %>%
+  summarise(mean_SleepEfficiency = mean(SleepEfficiency, na.rm = TRUE))
+
+print(avg_sleep_efficiency)
+```
+
+```{r}
+plot(x = sleep$TBT, y = sleep$SleepEfficiency, data = sleep)
+```
+
+
+```{r}
+# Research Question 2:
+# Is the doctor’s hypothesis (that one requires a fixed amount of sleep) reasonable?
+model1 <- lm(TST ~ TBT, data = sleep)
+summary(model1)
+# (If the slope for TBT is near 0, it would support the idea that actual sleep time doesn’t change much with extra time in bed.)
+# Plots in EDA part can also contribute to this question
+```
+
+
+```{r}
+model2 <- lm(SleepEfficiency ~ TBT, data = sleep)
+summary(model2)
+```
+
+
+```{r}
+# Research Question 3:
+# Do calcium-magnesium supplements affect sleep onset or sleep duration?
+# We examine whether taking the supplement (Cal) predicts TTS or TST.
+# Model for TTS (falling asleep)
+model3 <- lm(TTS ~ Cal + Alc + Run, data = sleep)
+summary(model3)
+```
+
+```{r}
+# Model for TST (staying asleep), controlling for TBT since TBT largely determines the opportunity for sleep.
+model4 <- lm(TST ~ TBT + Cal + Alc + Run, data = sleep)
+summary(model4)
+```
+
+```{r}
+# Consider sleep efficiency as an outcome.
+model5 <- lm(SleepEfficiency ~ TBT + Cal + Alc + Run, data = sleep)
+summary(model5)
+```
+
+```{r}
+# Research Question 4:
+# Do any other factors affect sleep patterns?
+model6 <- lm(TTS ~ TBT + Cal + Alc + Run, data = sleep)
+summary(model6)
+```
+
+
+```{r}
+# Investigate the influence of previous days
+
+# Ensure the data are sorted by Date
+sleep <- sleep %>% arrange(Date)
+
+# Create lagged variables and rolling averages for previous day's, previous 3 days, and previous 7 days.
+# The lag() function from dplyr creates the previous day’s values.
+# The rollmean() function from zoo calculates the rolling (moving) average.
+sleep <- sleep %>%
+  mutate(
+    # Previous day's values
+    lag1_TST = lag(TST, 1),
+    lag1_TTS = lag(TTS, 1),
+    lag1_TBT = lag(TBT, 1),
+    lag1_Run = lag(Run, 1),
+    
+    # Average of previous 3 days
+    avg3_TST = rollmean(lag(TST, 1), k = 3, fill = NA, align = "right"),
+    avg3_TTS = rollmean(lag(TTS, 1), k = 3, fill = NA, align = "right"),
+    avg3_TBT = rollmean(lag(TBT, 1), k = 3, fill = NA, align = "right"),
+    avg3_Run = rollmean(lag(Run, 1), k = 3, fill = NA, align = "right"),
+    
+    # Average of previous 7 days.
+    avg7_TST = rollmean(lag(TST, 1), k = 7, fill = NA, align = "right"),
+    avg7_TTS = rollmean(lag(TTS, 1), k = 7, fill = NA, align = "right"),
+    avg7_TBT = rollmean(lag(TBT, 1), k = 7, fill = NA, align = "right"),
+    avg7_Run = rollmean(lag(Run, 1), k = 7, fill = NA, align = "right")
+  )
+
+# Because the first few rows will have NA values (since there are not enough previous days),
+# we filter out rows with missing lagged/rolling values.
+sleep_model <- sleep %>%
+  filter(!is.na(lag1_TST),
+         !is.na(avg3_TST),
+         !is.na(avg7_TST))
+
+head(sleep_model)
+```
+
+```{r}
+# Model for current day's TST.
+# This model uses the previous day's, 3-day average, and 7-day average values of TST, TTS, TBT, and miles_run,
+# and also controls for other factors such as Calcium supplement (Cal) and Alcohol (Alc).
+model_TST_1 <- lm(TST ~ lag1_TST + 
+                    lag1_TTS + 
+                    lag1_TBT + 
+                    lag1_Run + 
+                    Cal + Alc,
+                data = sleep_model)
+summary(model_TST_1)
+```
+
+```{r}
+model_TST_3 <- lm(TST ~ avg3_TST + 
+                    avg3_TTS + 
+                    avg3_TBT + 
+                    avg3_Run + 
+                    Cal + Alc,
+                data = sleep_model)
+summary(model_TST_3)
+```
+
+
+```{r}
+# Model for current day's TTS.
+model_TTS_1 <- lm(TTS ~ lag1_TST  +
+                    lag1_TTS  +
+                    lag1_TBT +
+                    Cal + Alc + Run,
+                data = sleep_model)
+summary(model_TTS_1)
+```
+
+```{r}
+model_TTS_3 <- lm(TTS ~ avg3_TST + avg3_TTS + avg3_TBT +
+                    Cal + Alc + Run,
+                data = sleep_model)
+summary(model_TTS_3)
+```
+
+```{r}
+# Diagnostic Plots for the Models
+
+# For model1 (TST ~ TBT)
+par(mfrow = c(2, 2))
+plot(model1)
+
+# For model2 (TTS ~ Cal + Alc + Run)
+par(mfrow = c(2, 2))
+plot(model2)
+
+# For model3
+par(mfrow = c(2, 2))
+plot(model3)
+
+
+# For model4
+par(mfrow = c(2, 2))
+plot(model4)
+
+# For model5
+par(mfrow = c(2, 2))
+plot(model5)
+
+
+# For model6
+par(mfrow = c(2, 2))
+plot(model6)
+```
+
+```{r}
+# For model_TST_1
+par(mfrow = c(2, 2))
+plot(model_TST_1)
+
+# For model_TST_3
+par(mfrow = c(2, 2))
+plot(model_TST_3)
+
+# For model_TTS_1
+par(mfrow = c(2, 2))
+plot(model_TTS_1)
+
+# For model_TTS_3
+par(mfrow = c(2, 2))
+plot(model_TTS_3)
+
+# Reset plotting parameters to default (1 plot per page)
+par(mfrow = c(1, 1))
+```
+
+
+BOXplots after separating bedtimes into 6 categories and against sleep metrics:
+
+```{r}
+# Load necessary library
+library(patchwork)
+
+# Categorize bedtime into six periods
+sleep <- sleep %>%
+  mutate(
+    BedtimeCategory = case_when(
+      Bed_hour >= 20 & Bed_hour < 22 ~ "20:00-21:59",
+      Bed_hour >= 22 & Bed_hour < 24  ~ "22:00-23:59",
+      Bed_hour >= 0  & Bed_hour < 2  ~ "00:00-01:59",
+      Bed_hour >= 2  & Bed_hour < 4  ~ "02:00-03:59",
+      Bed_hour >= 4  & Bed_hour < 6  ~ "04:00-05:59",
+      TRUE ~ "Other"
+    ),
+    BedtimeCategory = factor(BedtimeCategory, 
+                             levels = c("20:00-21:59", "22:00-23:59", "00:00-01:59",
+                                        "02:00-03:59", "04:00-05:59", "Other"))
+  )
+
+# Create individual boxplots
+p1 <- ggplot(sleep, aes(x = BedtimeCategory, y = SleepEfficiency, fill = BedtimeCategory)) +
+  geom_boxplot() +
+  labs(title = "Sleep Efficiency", x = "Bedtime Period", y = "Sleep Efficiency (%)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none")
+
+p2 <- ggplot(sleep, aes(x = BedtimeCategory, y = TTS, fill = BedtimeCategory)) +
+  geom_boxplot() +
+  labs(title = "Time to Sleep (TTS)", x = "Bedtime Period", y = "TTS (minutes)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none")
+
+p3 <- ggplot(sleep, aes(x = BedtimeCategory, y = Awake_time, fill = BedtimeCategory)) +
+  geom_boxplot() +
+  labs(title = "Awake Time", x = "Bedtime Period", y = "Awake Time (minutes)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none")
+
+p4 <- ggplot(sleep, aes(x = BedtimeCategory, y = TST, fill = BedtimeCategory)) +
+  geom_boxplot() +
+  labs(title = "Total Bed Time (TST)", x = "Bedtime Period", y = "TST (minutes)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none")
+
+
+combined_plot <- (p1 | p2) / (p3 | p4) + 
+  plot_annotation(
+    title = "Effect of Bedtime on Sleep Metrics",
+    theme = theme(plot.title = element_text(size = 16, face = "bold"))
+  )
+
+
+print(combined_plot)
+
+```
+
+Mixed effects model grouped by segment:
+
+```{r}
+library(lme4)
+
+# Fit a mixed-effects model with Segment as a grouping factor (random effect)
+model_mixed <- lmer(SleepEfficiency ~ TTS + Awake_time + Bed_time_continuous + Cal + Alc + Run + (1 | Segment), data = sleep)
+
+
+summary(model_mixed)
+
+
+
+plot(model_mixed)
+
+# Random effects structure
+ranef(model_mixed)
+
+```
+
+SCATTER PLOT WITH PIECEWISE SMOOTHING:
+
+```{r}
+ggplot(sleep, aes(x = TBT, y = SleepEfficiency)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "loess", span = 0.75, color = "red") +
+  labs(title = "Sleep Efficiency vs. Total Bed Time",
+       x = "Total Bed Time (TBT) (minutes)",
+       y = "Sleep Efficiency (%)") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 20, face = "bold"),  # Bigger, bold title
+    axis.title.x = element_text(size = 18, face = "bold"),  # Bigger X-axis label
+    axis.title.y = element_text(size = 18, face = "bold"),  # Bigger Y-axis label
+    axis.text.x = element_text(size = 16),  # Bigger X-axis tick labels
+    axis.text.y = element_text(size = 16),  # Bigger Y-axis tick labels
+    legend.text = element_text(size = 14),  # Bigger legend text (if applicable)
+    legend.title = element_text(size = 16, face = "bold")  # Bigger legend title
+  )
+
+
+```
+
+
+BOXPLOT TO SEE IF SUPPLEMENTS HELP TO REDUCE AWAKE TIME:
+
+```{r}
+ggplot(sleep, aes(x = factor(Cal), y = Awake_time, fill = factor(Cal))) +
+  geom_boxplot() +
+  labs(title = "Awake Time by Calcium Supplement Intake",
+       x = "Calcium Supplement (0 = No, 1 = Yes)",
+       y = "Awake Time (minutes)") +
+  scale_fill_manual(values = c("lightblue", "orange")) +  # Custom colors
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 18, face = "bold"),
+    axis.title.x = element_text(size = 16, face = "bold"),
+    axis.title.y = element_text(size = 16, face = "bold"),
+    axis.text.x = element_text(size = 14),
+    axis.text.y = element_text(size = 14),
+    legend.position = "none"  # Remove redundant legend
+  )
+
+```
+
+
+BOXPLOTS TO SEE IF SUPPLEMENTS HELP REDUCE TIME TO SLEEP:
+
+```{r}
+ggplot(sleep, aes(x = factor(Cal), y = TTS, fill = factor(Cal))) +
+  geom_boxplot() +
+  labs(title = "Time to Sleep (TTS) by Calcium Supplement Intake",
+       x = "Calcium Supplement (0 = No, 1 = Yes)",
+       y = "Time to sleep (minutes)") +
+  scale_fill_manual(values = c("lightblue", "orange")) +  # Custom colors
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 18, face = "bold"),
+    axis.title.x = element_text(size = 16, face = "bold"),
+    axis.title.y = element_text(size = 16, face = "bold"),
+    axis.text.x = element_text(size = 14),
+    axis.text.y = element_text(size = 14),
+    legend.position = "none"  # Remove redundant legend
+  )
+```
+
+
+TIME TO SLEEP AND AWAKE TIME BY SUPPLEMENT USAGE:
+
+```{r}
+library(ggplot2)
+library(patchwork)
+
+# Boxplot for Awake Time
+p1 <- ggplot(sleep, aes(x = factor(Cal), y = Awake_time, fill = factor(Cal))) +
+  geom_boxplot() +
+  labs(
+       x = "0 = No, 1 = Yes",
+       y = "Awake Time (minutes)") +
+  scale_fill_manual(values = c("lightblue", "orange")) +  # Custom colors
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16, face = "bold"),  # Larger title
+    axis.title.x = element_text(size = 16, face = "bold"),  # Larger X-axis title
+    axis.title.y = element_text(size = 16, face = "bold"),  # Larger Y-axis title
+    axis.text.x = element_text(size = 16),  # Larger X-axis tick labels
+    axis.text.y = element_text(size = 16),  # Larger Y-axis tick labels
+    legend.position = "none"  # Remove redundant legend
+  )
+
+# Boxplot for Time to Sleep (TTS)
+p2 <- ggplot(sleep, aes(x = factor(Cal), y = TTS, fill = factor(Cal))) +
+  geom_boxplot() +
+  labs(
+       x = "0 = No, 1 = Yes",
+       y = "Time to Sleep (minutes)") +
+  scale_fill_manual(values = c("lightblue", "orange")) +  # Custom colors
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16, face = "bold"),  # Larger title
+    axis.title.x = element_text(size = 16, face = "bold"),  # Larger X-axis title
+    axis.title.y = element_text(size = 16, face = "bold"),  # Larger Y-axis title
+    axis.text.x = element_text(size = 16),  # Larger X-axis tick labels
+    axis.text.y = element_text(size = 16),  # Larger Y-axis tick labels
+    legend.position = "none"  # Remove redundant legend
+  )
+
+# Combine plots side by side with a main title
+combined_plot <- p1 + p2 +
+  plot_annotation(
+    title = "Effect of Supplements on Sleep Metrics",
+    theme = theme(
+      plot.title = element_text(size = 24, face = "bold"),  # Bigger main title
+      plot.subtitle = element_text(size = 22, face = "italic")  # Bigger subtitle
+    )
+  )
+
+# Display the combined plot
+print(combined_plot)
+
+```
+
+Multiple linear regression:
+
+```{r}
+# Fit a multiple linear regression model for Sleep Efficiency
+model_sleep_eff <- lm(SleepEfficiency ~ TBT + TTS + TST + Alc + Cal + Run + Awake_time, data = sleep)
+
+# Display model summary
+summary(model_sleep_eff)
+
+
+library(ggplot2)
+#library(ggpubr)  # For arranging plots
+library(broom)   # For tidy model outputs
+
+# Fit the multiple linear regression model
+model_sleep_eff <- lm(SleepEfficiency ~ TBT + TTS + TST + Alc + Cal + Run + Awake_time, data = sleep)
+
+# Display model summary
+summary(model_sleep_eff)
+
+# ---- PLOT 1: Residual Diagnostics ----
+par(mfrow = c(2, 2))  # Set layout for 2x2 plots
+plot(model_sleep_eff)  # Default residual plots
+par(mfrow = c(1, 1))  # Reset layout
+
+# ---- PLOT 2: Regression Coefficients ----
+# Extract model coefficients
+model_coef <- tidy(model_sleep_eff)
+
+# Plot coefficient estimates with confidence intervals
+p1 <- ggplot(model_coef, aes(x = term, y = estimate, ymin = estimate - 1.96 * std.error, ymax = estimate + 1.96 * std.error)) +
+  geom_pointrange(color = "blue", size = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +  # Reference line at 0
+  coord_flip() +  # Flip for better readability
+  labs(title = "Regression Coefficients for Sleep Efficiency Model",
+       x = "Predictors", y = "Coefficient Estimate") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 18, face = "bold"))
+
+# ---- PLOT 3: Actual vs. Predicted Sleep Efficiency ----
+sleep$Predicted <- predict(model_sleep_eff)  # Generate predicted values
+
+p2 <- ggplot(sleep, aes(x = Predicted, y = SleepEfficiency)) +
+  geom_point(alpha = 0.5, color = "blue") +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +  # Regression line
+  labs(title = "Actual vs. Predicted Sleep Efficiency",
+       x = "Predicted Sleep Efficiency (%)", y = "Actual Sleep Efficiency (%)") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 18, face = "bold"))
+
+# ---- Combine Plots into One Figure ----
+library(patchwork)
+combined_plot <- p1 + p2 + plot_annotation(title = "Model Diagnostics & Results",
+                                           theme = theme(plot.title = element_text(size = 22, face = "bold")))
+print(combined_plot)
+
+
+
+```
+
+SCatterplot between tst and tbt:
+
+```{r}
+ggplot(sleep, aes(x = TBT, y = TST)) +
+  geom_point(alpha = 0.6, color = "blue") +  # Scatter points with transparency
+  geom_smooth(method = "lm", color = "red", se = TRUE, linetype = "solid") +  # Linear regression line with confidence interval
+  labs(title = "Scatter Plot of TST vs. TBT",
+       x = "Total Bed Time (TBT) (minutes)",
+       y = "Total Sleep Time (TST) (minutes)") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 18, face = "bold"),
+    axis.title.x = element_text(size = 16, face = "bold"),
+    axis.title.y = element_text(size = 16, face = "bold"),
+    axis.text.x = element_text(size = 14),
+    axis.text.y = element_text(size = 14)
+  )
+
+
+```
+
+Regression of TBT over TST:
+
+```{r}
+# Fit linear regression model of TBT over TST
+model_tbt_tst <- lm(TBT ~ TST, data = sleep)
+
+# Display model summary to extract estimate
+summary(model_tbt_tst)
+
+# ---- PLOT 1: Standard Diagnostic Plots ----
+par(mfrow = c(2, 2))  # Arrange 2x2 plots
+plot(model_tbt_tst)  # Default diagnostic plots
+par(mfrow = c(1, 1))  # Reset layout
+
+# ---- PLOT 2: Residuals vs. Fitted ----
+ggplot(data = augment(model_tbt_tst), aes(.fitted, .resid)) +
+  geom_point(alpha = 0.6, color = "blue") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Residuals vs Fitted Values",
+       x = "Fitted Values (Predicted TBT)",
+       y = "Residuals") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 18, face = "bold"),
+    axis.title.x = element_text(size = 16, face = "bold"),
+    axis.title.y = element_text(size = 16, face = "bold"),
+    axis.text.x = element_text(size = 14),
+    axis.text.y = element_text(size = 14)
+  )
+
+```
+
+EFFECT OF ALCOHOL ON SLEEP METRICS:
+
+```{r}
+library(ggplot2)
+library(patchwork)
+
+# Boxplot for Awake Time
+p1 <- ggplot(sleep, aes(x = factor(Alc), y = Awake_time, fill = factor(Alc))) +
+  geom_boxplot() +
+  labs(
+       x = "0 = No, 1 = Yes",
+       y = "Awake Time (minutes)") +
+  scale_fill_manual(values = c("lightblue", "orange")) +  # Custom colors
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16, face = "bold"),  # Larger title
+    axis.title.x = element_text(size = 16, face = "bold"),  # Larger X-axis title
+    axis.title.y = element_text(size = 16, face = "bold"),  # Larger Y-axis title
+    axis.text.x = element_text(size = 16),  # Larger X-axis tick labels
+    axis.text.y = element_text(size = 16),  # Larger Y-axis tick labels
+    legend.position = "none"  # Remove redundant legend
+  )
+
+# Boxplot for Time to Sleep (TTS)
+p2 <- ggplot(sleep, aes(x = factor(Alc), y = SleepEfficiency, fill = factor(Alc))) +
+  geom_boxplot() +
+  labs(
+       x = "0 = No, 1 = Yes",
+       y = "Sleep Efficiency (minutes)") +
+  scale_fill_manual(values = c("lightblue", "orange")) +  # Custom colors
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16, face = "bold"),  # Larger title
+    axis.title.x = element_text(size = 16, face = "bold"),  # Larger X-axis title
+    axis.title.y = element_text(size = 16, face = "bold"),  # Larger Y-axis title
+    axis.text.x = element_text(size = 16),  # Larger X-axis tick labels
+    axis.text.y = element_text(size = 16),  # Larger Y-axis tick labels
+    legend.position = "none"  # Remove redundant legend
+  )
+
+# Combine plots side by side with a main title
+combined_plot <- p1 + p2 +
+  plot_annotation(
+    title = "Effect of Alcohol on Sleep Metrics",
+    theme = theme(
+      plot.title = element_text(size = 24, face = "bold"),  # Bigger main title
+      plot.subtitle = element_text(size = 22, face = "italic")  # Bigger subtitle
+    )
+  )
+
+# Display the combined plot
+print(combined_plot)
+```
+
+
+BAYESIAN MODEL: (with just TBT and Segment)
+
+diagnostics
+try removing months
+
+```{r, cache=TRUE}
+# Load necessary packages
+library(brms)
+library(dplyr)
+
+# Exclude days where the previous day is missing
+sleep <- sleep %>%
+  arrange(Date) %>%
+  mutate(prev_day_recorded = c(FALSE, diff(Date) == 1)) %>%
+  filter(prev_day_recorded == TRUE)
+
+# Convert Month into a categorical variable
+sleep$Month <- as.factor(format(sleep$Date, "%m"))
+
+# Fit Bayesian Hierarchical Model 
+bayesian_model <- brm(
+  formula = SleepEfficiency ~ TBT + (1 | Segment), 
+  data = sleep,
+  family = gaussian(),  # Normal likelihood
+  prior = c(
+    prior(normal(0, 10), class = "b"),  # Weakly informative priors for coefficients
+    prior(normal(0, 10), class = "Intercept"),
+    prior(cauchy(0, 2), class = "sd")  # Prior on random effect standard deviation
+  ),
+  iter = 4000, warmup = 2000, chains = 4, cores = 4,  # Robust MCMC settings
+  control = list(adapt_delta = 0.95)  # Helps with divergent transitions
+)
+
+# Show summary of the model
+summary(bayesian_model)
+
+# Plot posterior distributions for fixed effects
+plot(bayesian_model)
+
+```
+
+
+Full Bayesian model with all covariates except TTS and TST (to avoid collinearity)
+
+```{r, cache=TRUE}
+# Load necessary libraries
+library(brms)
+library(dplyr)
+library(ggplot2)
+
+# Exclude days where the previous day is missing
+sleep <- sleep %>%
+  arrange(Date) %>%
+  mutate(prev_day_recorded = c(FALSE, diff(Date) == 1)) %>%
+  filter(prev_day_recorded == TRUE)
+
+# Convert Month into a categorical variable
+sleep$Month <- as.factor(format(sleep$Date, "%m"))
+
+# Fit Bayesian Hierarchical Model with All Covariates
+bayesian_model_full <- brm(
+  formula = SleepEfficiency ~ TBT + Awake_time + Run + Cal + Alc + Bed_time_continuous + (1 | Segment), 
+  data = sleep,
+  family = gaussian(),  # Normal likelihood assumption
+  prior = c(
+    prior(normal(0, 10), class = "b"),  # Weakly informative priors for coefficients
+    prior(normal(0, 10), class = "Intercept"),
+    prior(cauchy(0, 2), class = "sd")  # Prior on random effect standard deviation
+  ),
+  iter = 10000, warmup = 5000, chains = 4, cores = 4,  # MCMC settings
+  control = list(adapt_delta = 0.95)  # Helps avoid divergent transitions
+)
+
+# Show summary of the model
+summary(bayesian_model_full)
+
+# Plot posterior distributions for fixed effects
+plot(bayesian_model_full)
+
+```
+
+
+Model Diagnostics:
+```{r}
+# Extract and view diagnostics
+diagnostics <- summary(bayesian_model_full)$fixed
+print(diagnostics)
+```
+
+
+
+```{r, cache=TRUE}
+
+
+pp_check(bayesian_model_full)
+
+residuals_df <- data.frame(
+  Fitted = fitted(bayesian_model_full)[, "Estimate"],
+  Residuals = residuals(bayesian_model_full)[, "Estimate"]
+)
+
+ggplot(residuals_df, aes(x = Fitted, y = Residuals)) +
+  geom_point(alpha = 0.6, color = "blue") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Residuals vs Fitted Values",
+       x = "Fitted Values (Predicted Sleep Efficiency)",
+       y = "Residuals") +
+  theme_minimal()
+```
+
+Bayesian Model Comparison:
+
+```{r, cache= TRUE}
+
+# Load necessary package
+#library(loo)
+
+# Compute LOO for both models
+#loo_model1 <- loo(bayesian_model)
+#loo_model2 <- loo(bayesian_model_full)
+
+# Compare models
+#loo_compare(loo_model1, loo_model2)
+
+
+```
+
+Bayesian Models to answer objective 3 TTS part:
+
+```{r, cache=TRUE}
+
+# Fit Bayesian Hierarchical Model with TTS response
+bayesian_model_TTS <- brm(
+  formula = TTS ~ TST + Awake_time + Run + Cal + Alc + Bed_time_continuous + (1 | Segment), 
+  data = sleep,
+  family = gaussian(),  # Normal likelihood assumption
+  prior = c(
+    prior(normal(0, 10), class = "b"),  # Weakly informative priors for coefficients
+    prior(normal(0, 10), class = "Intercept"),
+    prior(cauchy(0, 2), class = "sd")  # Prior on random effect standard deviation
+  ),
+  iter = 10000, warmup = 5000, chains = 4, cores = 4,  # MCMC settings
+  control = list(adapt_delta = 0.95)  # Helps avoid divergent transitions
+)
+
+# Show summary of the model
+summary(bayesian_model_TTS)
+
+# Plot posterior distributions for fixed effects
+plot(bayesian_model_TTS)
+
+```
+
+
+Model Diagnostics:
+```{r}
+# Extract and view diagnostics
+diagnostics <- summary(bayesian_model_TTS)$fixed
+print(diagnostics)
+```
+
+
+
+```{r, cache=TRUE}
+
+
+pp_check(bayesian_model_TTS)
+
+residuals_df <- data.frame(
+  Fitted = fitted(bayesian_model_TTS)[, "Estimate"],
+  Residuals = residuals(bayesian_model_TTS)[, "Estimate"]
+)
+
+ggplot(residuals_df, aes(x = Fitted, y = Residuals)) +
+  geom_point(alpha = 0.6, color = "blue") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Residuals vs Fitted Values for TTS",
+       x = "Fitted Values (Predicted Sleep Efficiency)",
+       y = "Residuals") +
+  theme_minimal()
+```
+
+
+
+Bayesian Models to answer objective 3 Awake_time part:
+
+```{r, cache=TRUE}
+
+# Fit Bayesian Hierarchical Model with Awake response
+bayesian_model_awake <- brm(
+  formula = Awake_time ~ TST + TTS + Run + Cal + Alc + Bed_time_continuous + (1 | Segment), 
+  data = sleep,
+  family = gaussian(),  # Normal likelihood assumption
+  prior = c(
+    prior(normal(0, 10), class = "b"),  # Weakly informative priors for coefficients
+    prior(normal(0, 10), class = "Intercept"),
+    prior(cauchy(0, 2), class = "sd")  # Prior on random effect standard deviation
+  ),
+  iter = 10000, warmup = 5000, chains = 4, cores = 4,  # MCMC settings
+  control = list(adapt_delta = 0.95)  # Helps avoid divergent transitions
+)
+
+# Show summary of the model
+summary(bayesian_model_awake)
+
+# Plot posterior distributions for fixed effects
+plot(bayesian_model_awake)
+
+```
+
+
+Model Diagnostics:
+```{r}
+# Extract and view diagnostics
+diagnostics <- summary(bayesian_model_awake)$fixed
+print(diagnostics)
+```
+
+
+
+```{r, cache=TRUE}
+
+
+pp_check(bayesian_model_awake)
+
+residuals_df <- data.frame(
+  Fitted = fitted(bayesian_model_awake)[, "Estimate"],
+  Residuals = residuals(bayesian_model_awake)[, "Estimate"]
+)
+
+ggplot(residuals_df, aes(x = Fitted, y = Residuals)) +
+  geom_point(alpha = 0.6, color = "blue") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Residuals vs Fitted Values for TTS",
+       x = "Fitted Values (Predicted Sleep Efficiency)",
+       y = "Residuals") +
+  theme_minimal()
+```
+
+
+
